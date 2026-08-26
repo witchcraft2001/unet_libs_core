@@ -1,0 +1,18 @@
+{
+  "UNETESP.DLL": {
+    "tag": "ESP",
+    "source": "https://github.com/witchcraft2001/sprinter_net (network/)",
+    "version": "0.2.41",
+    "size": 16032,
+    "sha256": "2bf4f90afbbdf34a68e486def7c5bc5cc17be4361f77cecb52004068c4ab5455",
+    "caps": "0x031F"
+  },
+  "UNETRTL.DLL": {
+    "tag": "RTL",
+    "source": "https://github.com/witchcraft2001/sprinter-rtl8019a",
+    "version": "0.2.56",
+    "size": 16237,
+    "sha256": "8881b534306efb00b2c871ed7044bb2c2310fb8b25b33e01880239c81632160c",
+    "caps": "0x001F"
+  }
+}

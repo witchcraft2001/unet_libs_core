@@ -1,0 +1,703 @@
+# ==========================================================================
+# UNET ABI - single source of truth.
+#
+# This file is parsed by tools/gen_bindings.py to emit per-language binding
+# files under bindings/<target>/. Do not hand-edit any file in bindings/ -
+# regenerate it from here instead ("gen_bindings.py gen").
+#
+# This table is FROZEN: existing group/name/value triples must never change.
+# New capabilities extend the reserved slots and the caps bitmask, never
+# renumber existing functions. gen_bindings.py refuses to emit a changed
+# value for an existing name unless --force is passed.
+# ==========================================================================
+
+[meta]
+abi_version = "0x0100"
+frozen = true
+
+[[prose]]
+id = "header"
+en = """UNET - universal network DLL contract (libman 1.3 / L1)
+Shared ABI for UNETESP.DLL (ESP8266 / ESP-AT) and the future
+UNETRTL.DLL (RTL8019A). One interface, swappable backend.
+
+Consumers (asm / C / Pascal) load a backend DLL through libman 1.3
+(l_load / l_call / l_free) and drive the network through the numbered
+functions below. This file is the single source of truth for the
+function numbers, register ABI, error codes, capability bits, GETINFO
+fields and options. It is FROZEN: new capabilities extend the reserved
+slots and the caps bitmask, never renumber existing functions.
+
+-----------------------------------------------------------------------
+Calling convention (libman l_call):
+  Consumer: HL = handle, B = function number, then CALL l_call.
+  Arguments are passed ONLY in A, DE, IX, IY (HL and BC are consumed by
+  the libman dispatcher). Results come back in A, DE, IX, IY.
+  Every UNET function returns its status in A (0 = NERR_OK, else a
+  NERR_* code). The libman dispatcher does NOT propagate a user
+  function's carry flag, so consumers MUST test A, not CF.
+
+Memory / window discipline (enforced and documented):
+  - Load the DLL into window 1 (0x4000) or window 2 (0x8000) only.
+    NEVER window 3 (0xC000): the ESP backend maps the ISA UART there
+    during every call and would swap its own code out. UNETESP refuses
+    to initialise if it detects it was loaded into window 3.
+  - All caller buffers (host/port strings, send/recv payload, GETINFO
+    destinations) must live BELOW 0xC000 and OUTSIDE the 16 KB window
+    the DLL was loaded into - the WHOLE buffer, not just its first byte;
+    both ends of the range are validated. Violations return NERR_PARAM.
+    WIN0 pointers are accepted: mapping a caller-owned page over DSS/system
+    memory there, and restoring it safely, is entirely the caller's duty.
+  - Host strings are limited to 128 bytes, port strings to 15 bytes
+    (longer arguments return NERR_PARAM).
+  - Keep at least ~256 bytes of free stack across a call.
+  - The library is NOT reentrant; one call at a time."""
+
+# --------------------------------------------------------------------
+# ABI version
+# --------------------------------------------------------------------
+[[group]]
+id = "abi"
+title_en = "ABI version reported by GETCAPS in IX (major<<8 | minor)"
+prefix = ""
+
+[[const]]
+group = "abi"
+name = "UNET_ABI_VERSION"
+value = 0x0100
+format = "hex4"
+comment_en = "ABI version reported by GETCAPS in IX (major<<8 | minor). Consumers should verify the major byte before relying on the numbered functions."
+
+# --------------------------------------------------------------------
+# Function numbers
+# --------------------------------------------------------------------
+[[group]]
+id = "fn"
+title_en = "Function numbers (index passed in B to l_call)"
+prefix = "UNET_FN_"
+format = "dec"
+
+[[const]]
+group = "fn"
+name = "UNET_FN_INIT"
+value = 0
+comment_en = "libman load hook. Checks window, XOR A. Do not call directly."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_FINI"
+value = 1
+comment_en = "libman free hook. Closes any open link, A=0. Do not call directly."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_GETCAPS"
+value = 2
+comment_en = "-> A=0, DE=caps bitmask, IX=UNET_ABI_VERSION. Callable before NETINIT."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_NETINIT"
+value = 3
+comment_en = "-> A (0 / NERR_NONET / NERR_HW / NERR_BUSY). Bring the link layer up."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_NETDONE"
+value = 4
+comment_en = "Close the active channel, leave the network up. A=0. Idempotent."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_CONNECT"
+value = 5
+comment_en = """A=channel, DE=host ASCIIZ, IX=port ASCIIZ -> A
+  channel 0..1 when GETCAPS reports CAP_MULTICHAN,
+  otherwise channel 0 only (else NERR_PARAM)
+  retries internally while the backend reports "busy\""""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_SEND"
+value = 6
+comment_en = """A=channel, DE=buffer, IX=length -> A, DE=bytes sent
+  TCP: chunked internally at 2048 (ESP-AT CIPSEND cap).
+  UDP: one datagram per call, length > 1472 -> NERR_PARAM.
+  Peer data arriving DURING a send may be dropped by the ESP
+  backend - drain RECV before sending (see docs/UNETAPI.md).
+  With UNET_OPT_SENDSLICE > 0 may return NERR_AGAIN:
+  repeat the same call to continue the transaction."""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RECV"
+value = 7
+comment_en = """A=channel, DE=buffer, IX=max, IY=timeout_ms -> A, DE=received, IX=flags
+  A=NERR_OK, DE=0            : nothing for this channel yet
+                               (timeout, or the backend buffered
+                               data for the OTHER channel - see
+                               UNET_RXF_XCHAN)
+  A=NERR_CLOSED             : peer closed (any DE bytes are valid first)
+  IX flags: see UNET_RXF_* below"""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_CLOSE"
+value = 8
+comment_en = "A=channel -> A. Idempotent. Closes ONE channel; use NETDONE to close every channel at once."
+
+[[const]]
+group = "fn"
+name = "UNET_FN_STATUS"
+value = 9
+comment_en = """A=channel -> A=0, DE=state (see UNET_ST_* below)
+  A=0xFF     -> network status WITHOUT touching hardware:
+                A=0/NERR_NONET, DE bit0 env configured, bit1 NETINIT done"""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_UDPOPEN"
+value = 10
+comment_en = """A=channel, DE=host, IX=rport ASCIIZ, IY=lport ASCIIZ|0 -> A
+  retries internally while the backend reports "busy\""""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESOLVE"
+value = 11
+comment_en = 'DE=host ASCIIZ, IX=dest(>=16 bytes) -> A, dest="a.b.c.d",0'
+
+[[const]]
+group = "fn"
+name = "UNET_FN_PING"
+value = 12
+comment_en = "DE=host ASCIIZ, IY=timeout_ms -> A, DE=round-trip ms"
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RXPAUSE"
+value = 13
+comment_en = """drop RTS so a slow consumer can catch up -> A
+  NERR_STATE before NETINIT (UART base not known yet)"""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RXRESUME"
+value = 14
+comment_en = "raise RTS to resume receive -> A (NERR_STATE before NETINIT)"
+
+[[const]]
+group = "fn"
+name = "UNET_FN_GETINFO"
+value = 15
+comment_en = """A=field id, DE=dest, IX=max(incl NUL) -> A; empty string if
+  unset. IX=0 -> NERR_PARAM."""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_LASTERR"
+value = 16
+comment_en = """DE=dest, IX=max -> A=0; copies the TAIL of the last AT/driver
+  response (the final ERROR/CLOSED line survives truncation)"""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_SETOPT"
+value = 17
+comment_en = "A=option id, DE=value -> A"
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED18"
+value = 18
+comment_en = "reserved -> NERR_NOTSUP"
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED19"
+value = 19
+comment_en = ""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED20"
+value = 20
+comment_en = ""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED21"
+value = 21
+comment_en = ""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED22"
+value = 22
+comment_en = ""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_RESERVED23"
+value = 23
+comment_en = ""
+
+[[const]]
+group = "fn"
+name = "UNET_FN_COUNT"
+value = 24
+comment_en = "total slots in the jump table"
+
+# --------------------------------------------------------------------
+# Error codes
+# --------------------------------------------------------------------
+[[group]]
+id = "nerr"
+title_en = "Error codes (returned in A). Superset of the ftpclient NERR_* set."
+prefix = "NERR_"
+format = "dec"
+
+[[const]]
+group = "nerr"
+name = "NERR_OK"
+value = 0
+comment_en = "success"
+
+[[const]]
+group = "nerr"
+name = "NERR_HW"
+value = 1
+comment_en = "network hardware not found / not responding"
+
+[[const]]
+group = "nerr"
+name = "NERR_NONET"
+value = 2
+comment_en = "network not brought up (env not published)"
+
+[[const]]
+group = "nerr"
+name = "NERR_DNS"
+value = 3
+comment_en = "host name could not be resolved"
+
+[[const]]
+group = "nerr"
+name = "NERR_CONNECT"
+value = 4
+comment_en = "TCP/UDP connect failed"
+
+[[const]]
+group = "nerr"
+name = "NERR_SEND"
+value = 5
+comment_en = "send failed"
+
+[[const]]
+group = "nerr"
+name = "NERR_RECV_TIMEOUT"
+value = 6
+comment_en = "receive timed out (reserved; RECV returns OK/DE=0 for idle)"
+
+[[const]]
+group = "nerr"
+name = "NERR_CLOSED"
+value = 7
+comment_en = "connection closed by peer"
+
+[[const]]
+group = "nerr"
+name = "NERR_CANCEL"
+value = 8
+comment_en = "user cancelled (Esc / Ctrl+Z) - only when SETOPT CANCELKEYS=1"
+
+[[const]]
+group = "nerr"
+name = "NERR_PARAM"
+value = 9
+comment_en = "invalid argument (bad channel, buffer out of range, ...)"
+
+[[const]]
+group = "nerr"
+name = "NERR_NOTSUP"
+value = 10
+comment_en = "operation not supported by this backend/firmware"
+
+[[const]]
+group = "nerr"
+name = "NERR_STATE"
+value = 11
+comment_en = "wrong state (e.g. CONNECT before NETINIT, or already open)"
+
+[[const]]
+group = "nerr"
+name = "NERR_TIMEOUT"
+value = 12
+comment_en = "generic operation timeout (ping / resolve)"
+
+[[const]]
+group = "nerr"
+name = "NERR_BUSY"
+value = 13
+comment_en = "backend busy (ESP IP stack still warming up)"
+
+[[const]]
+group = "nerr"
+name = "NERR_PROTO"
+value = 14
+comment_en = "unexpected/protocol error in backend response"
+
+[[const]]
+group = "nerr"
+name = "NERR_AGAIN"
+value = 15
+comment_en = """SEND suspended: the link was silent for one
+  UNET_OPT_SENDSLICE quantum. Repeat the SAME call
+  (same channel/buffer/length) to continue the
+  transaction; DE = bytes confirmed so far. Only
+  backends with UNET_CAP_ASYNCSEND return this."""
+
+# --------------------------------------------------------------------
+# Capability bits
+# --------------------------------------------------------------------
+[[group]]
+id = "cap"
+title_en = "Capability bits (returned in DE by GETCAPS)"
+prefix = "UNET_CAP_"
+format = "hex4"
+note_en = """UNETESP v1 advertises: TCP | UDP | RESOLVE | PING | RXFLOW = 0x010F
+UNETESP v0.3 adds MULTICHAN = 0x011F
+UNETESP v0.4 adds ASYNCSEND = 0x031F"""
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_TCP"
+value = 0x0001
+comment_en = "TCP client connect/send/recv/close"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_UDP"
+value = 0x0002
+comment_en = "connected UDP"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_RESOLVE"
+value = 0x0004
+comment_en = "RESOLVE returns a dotted-quad (may still NERR_NOTSUP at runtime)"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_PING"
+value = 0x0008
+comment_en = "ICMP-style ping"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_MULTICHAN"
+value = 0x0010
+comment_en = "channels 0 and 1 can be open at the same time (UNETESP >= 0.3; UNETRTL: 0)"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_LISTEN"
+value = 0x0020
+comment_en = "inbound/listen sockets (neither backend: 0)"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_RAWETH"
+value = 0x0040
+comment_en = "raw Ethernet frames (RTL only)"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_TRANSPARENT"
+value = 0x0080
+comment_en = "ESP transparent byte-pipe mode (reserved extension)"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_RXFLOW"
+value = 0x0100
+comment_en = "consumer must honour RXPAUSE/RXRESUME for lossless receive"
+
+[[const]]
+group = "cap"
+name = "UNET_CAP_ASYNCSEND"
+value = 0x0200
+comment_en = "SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE); UNETRTL: 0"
+
+# --------------------------------------------------------------------
+# STATUS(channel) state bits
+# --------------------------------------------------------------------
+[[group]]
+id = "st"
+title_en = "STATUS(channel) state bits (returned in DE)"
+prefix = "UNET_ST_"
+format = "hex4"
+
+[[const]]
+group = "st"
+name = "UNET_ST_CONN"
+value = 0x0002
+comment_en = "channel is connected (last known state)"
+
+[[const]]
+group = "st"
+name = "UNET_ST_RXPEND"
+value = 0x0004
+comment_en = """received data is buffered for this channel and
+  not delivered yet. OPTIONAL: only backends that
+  buffer per channel set it (UNETESP >= 0.3 with
+  CAP_MULTICHAN); UNETRTL never does, so consumers
+  must treat "not set" as "unknown", not as "empty\""""
+
+# --------------------------------------------------------------------
+# RECV flag bits
+# --------------------------------------------------------------------
+[[group]]
+id = "rxf"
+title_en = "RECV flag bits (returned in IX)"
+prefix = "UNET_RXF_"
+format = "hex4"
+
+[[const]]
+group = "rxf"
+name = "UNET_RXF_TRUNC"
+value = 0x0001
+comment_en = """oversized datagram was truncated. UNETESP never
+  truncates - its tail arrives on the next call
+  with UNET_RXF_MORE set."""
+
+[[const]]
+group = "rxf"
+name = "UNET_RXF_MORE"
+value = 0x0002
+comment_en = "more data is already buffered for this channel"
+
+[[const]]
+group = "rxf"
+name = "UNET_RXF_LOST"
+value = 0x0004
+comment_en = """UART overrun (LSR OE) or a dropped buffered frame
+  since the last call; per channel from v0.3"""
+
+[[const]]
+group = "rxf"
+name = "UNET_RXF_XCHAN"
+value = 0x0008
+comment_en = """data is pending on the OTHER channel (v0.3,
+  optional). A read that returns DE=0 with this bit
+  set means "switch channels", not "link idle\""""
+
+# --------------------------------------------------------------------
+# GETINFO field ids
+# --------------------------------------------------------------------
+[[group]]
+id = "if"
+title_en = "GETINFO field ids (A on entry)"
+prefix = "UNET_IF_"
+format = "dec"
+
+[[const]]
+group = "if"
+name = "UNET_IF_BACKEND"
+value = 0
+comment_en = 'short backend tag, e.g. "ESP" / "RTL"'
+
+[[const]]
+group = "if"
+name = "UNET_IF_IP"
+value = 1
+comment_en = "station IPv4, dotted quad"
+
+[[const]]
+group = "if"
+name = "UNET_IF_MASK"
+value = 2
+comment_en = "netmask"
+
+[[const]]
+group = "if"
+name = "UNET_IF_GW"
+value = 3
+comment_en = "gateway"
+
+[[const]]
+group = "if"
+name = "UNET_IF_MAC"
+value = 4
+comment_en = "station MAC"
+
+[[const]]
+group = "if"
+name = "UNET_IF_DNS1"
+value = 5
+comment_en = "primary DNS"
+
+[[const]]
+group = "if"
+name = "UNET_IF_DNS2"
+value = 6
+comment_en = "secondary DNS"
+
+[[const]]
+group = "if"
+name = "UNET_IF_IPSRC"
+value = 7
+comment_en = '"STATIC" / "DHCP"'
+
+[[const]]
+group = "if"
+name = "UNET_IF_SSID"
+value = 8
+comment_en = "Wi-Fi SSID (ESP only; empty on RTL)"
+
+[[const]]
+group = "if"
+name = "UNET_IF_BAUD"
+value = 9
+comment_en = "UART baud (ESP only; empty on RTL)"
+
+[[const]]
+group = "if"
+name = "UNET_IF_NTP"
+value = 10
+comment_en = "configured NTP server"
+
+[[const]]
+group = "if"
+name = "UNET_IF_TZ"
+value = 11
+comment_en = "timezone"
+
+[[const]]
+group = "if"
+name = "UNET_IF_HW"
+value = 12
+comment_en = 'hardware descriptor ("<slot>/#<base>")'
+
+# --------------------------------------------------------------------
+# SETOPT option ids (A) and values (DE)
+# --------------------------------------------------------------------
+[[group]]
+id = "opt"
+title_en = "SETOPT option ids (A) and values (DE)"
+prefix = "UNET_OPT_"
+format = "dec"
+
+[[const]]
+group = "opt"
+name = "UNET_OPT_CANCELKEYS"
+value = 1
+comment_en = "DE=1 poll Esc/Ctrl+Z during blocking UART loops (default 0)"
+
+[[const]]
+group = "opt"
+name = "UNET_OPT_RXTRIG"
+value = 2
+comment_en = """DE=1/4/8/14 - RX FIFO auto-RTS trigger level (ESP; default 4).
+  NERR_STATE before NETINIT (UART base not known yet).
+  TR4 is the stable compromise: TR1 throttles ESP to ~1 KB/s,
+  while TR8 leaves too little headroom and causes overruns. Use
+  other values only for field diagnostics on specific hardware."""
+
+[[const]]
+group = "opt"
+name = "UNET_OPT_SENDSLICE"
+value = 3
+comment_en = """DE=ms of link SILENCE after which SEND suspends with
+  NERR_AGAIN instead of blocking (0 = blocking, the default;
+  minimum 50 is enforced). Requires UNET_CAP_ASYNCSEND.
+  While a send is suspended, RECV serves only already
+  buffered data and returns immediately, and other
+  transmitting calls return NERR_BUSY without touching
+  the UART (see docs/UNETAPI.md)."""
+
+# --------------------------------------------------------------------
+# UNETLD loader error codes (docs/UNETLD-SPEC.md). Part of the
+# cross-language contract: asm/Pascal/C loader ports must all agree on
+# these values, not just on the UNET_* function ABI above.
+# --------------------------------------------------------------------
+[[group]]
+id = "unetld_e"
+title_en = "UNETLD loader error codes, stored in UNETLD.ERROR and returned in A on CF=1 (asm) / false (Pascal/C)."
+prefix = "UNETLD_E_"
+format = "dec"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_NOENV"
+value = 1
+comment_en = "NET is not set or empty"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_BADVALUE"
+value = 2
+comment_en = "NET is not 3-4 chars of [A-Z0-9] (raw value in ENV_VALUE)"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_LOAD"
+value = 3
+comment_en = "l_load failed (see LIBMAN.l_reason/l_dss_error/...)"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_INFO"
+value = 4
+comment_en = "l_info failed"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_NAME"
+value = 5
+comment_en = "the loaded DLL's L1 name does not match NET"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_CALL"
+value = 6
+comment_en = "libman dispatcher (CF) failure, or GETCAPS returned a non-OK status during LOAD"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_ABI"
+value = 7
+comment_en = "GETCAPS major ABI byte != HIGH(UNET_ABI_VERSION)"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_STATUS"
+value = 8
+comment_en = "STATUS(0FFh) returned neither NERR_OK nor NERR_NONET"
+
+[[const]]
+group = "unetld_e"
+name = "UNETLD_E_NETINIT"
+value = 9
+comment_en = "NETINIT returned a non-OK status (see LAST_STATUS)"
+
+# --------------------------------------------------------------------
+# UNETLD loader state flags
+# --------------------------------------------------------------------
+[[group]]
+id = "unetld_f"
+title_en = "UNETLD loader state flags, stored in UNETLD.FLAGS."
+prefix = "UNETLD_F_"
+format = "bin8"
+
+[[const]]
+group = "unetld_f"
+name = "UNETLD_F_LOADED"
+value = 0b00000001
+comment_en = "bit0 of FLAGS: DLL handle is open"
+
+[[const]]
+group = "unetld_f"
+name = "UNETLD_F_NETINIT"
+value = 0b00000010
+comment_en = "bit1 of FLAGS: NETINIT succeeded"
