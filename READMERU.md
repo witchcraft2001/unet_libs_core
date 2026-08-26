@@ -31,7 +31,8 @@ abi/unet_abi.toml          единый источник истины ABI UNET �
                             загрузчика UNETLD_E_*/UNETLD_F_*
 bindings/asm/unet.inc       сгенерировано - заголовок EQU для SjASMPlus
 bindings/solidc/UNET.H      сгенерировано - K&R-safe заголовок #define
-bindings/pascal/UNET.PUI    сгенерировано - const-only юнит в стиле TP3
+bindings/pascal/UNET.INC    сгенерировано - голый $I-include с константами
+                            (не юнит - см. заголовок самого файла, почему)
 dll/UNETESP.DLL             готовый бекенд WiFi/ESP8266
 dll/UNETRTL.DLL             готовый бекенд ISA-карты RTL8019A
 dll/manifest.json           size/sha256/версия/происхождение обеих DLL

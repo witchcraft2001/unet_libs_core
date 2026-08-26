@@ -31,7 +31,8 @@ abi/unet_abi.toml          single source of truth for the UNET ABI and the
                             UNETLD_E_*/UNETLD_F_* loader codes
 bindings/asm/unet.inc       generated - SjASMPlus EQU header
 bindings/solidc/UNET.H      generated - K&R-safe #define header
-bindings/pascal/UNET.PUI    generated - TP3-style const-only unit
+bindings/pascal/UNET.INC    generated - bare $I-include of const declarations
+                            (not a unit - see the file's own header for why)
 dll/UNETESP.DLL             prebuilt WiFi/ESP8266 backend
 dll/UNETRTL.DLL             prebuilt ISA RTL8019A backend
 dll/manifest.json           size/sha256/version/provenance for both DLLs

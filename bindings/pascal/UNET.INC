@@ -2,6 +2,13 @@
   GENERATED FILE - DO NOT EDIT.
   Source: abi/unet_abi.toml in unet_libs_core. Regenerate with
   tools/gen_bindings.py gen --target pascal.
+
+  This is a bare $I-include (const declarations only), NOT a unit: the
+  DSS Turbo Pascal dialect's compiler does not allow a `uses` clause to
+  coexist with an $I-included declaration in the same program, so a
+  unit/uses wrapper cannot be used by an $I-only consumer such as
+  unet_libs_pascal/src/UNETLD.PAS. Include this file with $I, directly
+  after DSSCORE.INC/DSSSYS.INC/LIBMAN.INC.
   ========================================================================== }
 
 {
@@ -41,8 +48,6 @@
     - Keep at least ~256 bytes of free stack across a call.
     - The library is NOT reentrant; one call at a time.
 }
-
-unit UNet;
 
 const
   { ABI version reported by GETCAPS in IX (major<<8 | minor) }
@@ -196,5 +201,3 @@ UNETESP v0.4 adds ASYNCSEND = 0x031F }
   { UNETLD loader state flags, stored in UNETLD.FLAGS. }
   UnetldFLoaded = 1;  { bit0 of FLAGS: DLL handle is open }
   UnetldFNetinit = 2;  { bit1 of FLAGS: NETINIT succeeded }
-
-end.

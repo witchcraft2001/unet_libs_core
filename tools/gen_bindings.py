@@ -53,6 +53,13 @@ BANNER_PAS = """{ ==============================================================
   GENERATED FILE - DO NOT EDIT.
   Source: abi/unet_abi.toml in unet_libs_core. Regenerate with
   tools/gen_bindings.py gen --target pascal.
+
+  This is a bare $I-include (const declarations only), NOT a unit: the
+  DSS Turbo Pascal dialect's compiler does not allow a `uses` clause to
+  coexist with an $I-included declaration in the same program, so a
+  unit/uses wrapper cannot be used by an $I-only consumer such as
+  unet_libs_pascal/src/UNETLD.PAS. Include this file with $I, directly
+  after DSSCORE.INC/DSSSYS.INC/LIBMAN.INC.
   ========================================================================== }
 """
 
@@ -206,7 +213,13 @@ def render_c(groups, consts, prose):
 
 
 # ---------------------------------------------------------------------
-# pascal target (TP3-style const-only unit, no implementation section)
+# pascal target - bare $I-include const declarations, TP3 "legacy .INC"
+# style (NOT a unit: this dialect's compiler does not allow a `uses`
+# clause to coexist with an `{$I}`-included declaration in the same
+# program - see docs/UNETLD-PAS.md in unet_libs_pascal for how this was
+# discovered - so the ABI bindings for Pascal must be $I-able source
+# text, not a unit/uses PUI wrapper. Include this file (via $I) before
+# UNETLD.PAS.
 # ---------------------------------------------------------------------
 def render_pascal(groups, consts, prose):
     lines = [BANNER_PAS.rstrip("\n"), ""]
@@ -217,8 +230,6 @@ def render_pascal(groups, consts, prose):
             lines.append(f"  {ln}".rstrip())
         lines.append("}")
         lines.append("")
-    lines.append("unit UNet;")
-    lines.append("")
     lines.append("const")
 
     by_group = consts_by_group(consts)
@@ -240,15 +251,13 @@ def render_pascal(groups, consts, prose):
             lines.append(f"  {{ {note} }}")
         lines.append("")
 
-    lines.append("end.")
-    lines.append("")
     return "\n".join(lines)
 
 
 TARGETS = {
     "asm": ("bindings/asm/unet.inc", render_asm),
     "solidc": ("bindings/solidc/UNET.H", render_c),
-    "pascal": ("bindings/pascal/UNET.PUI", render_pascal),
+    "pascal": ("bindings/pascal/UNET.INC", render_pascal),
 }
 
 
