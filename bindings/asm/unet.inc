@@ -91,8 +91,11 @@ UNET_FN_GETINFO		EQU 15	; A=field id, DE=dest, IX=max(incl NUL) -> A; empty stri
 UNET_FN_LASTERR		EQU 16	; DE=dest, IX=max -> A=0; copies the TAIL of the last AT/driver
 				;   response (the final ERROR/CLOSED line survives truncation)
 UNET_FN_SETOPT		EQU 17	; A=option id, DE=value -> A
-UNET_FN_RESERVED18		EQU 18	; reserved -> NERR_NOTSUP
-UNET_FN_RESERVED19		EQU 19
+UNET_FN_LISTEN		EQU 18	; A=channel, DE=local TCP port (binary, 1..65535) -> A.
+				;   Requires UNET_CAP_LISTEN. Arms one closed channel for a single inbound
+				;   connection; poll RECV to progress accept. CLOSE or peer close re-arms the
+				;   listener on the same port; UNLISTEN stops it.
+UNET_FN_UNLISTEN		EQU 19	; A=the currently listening channel -> A. Stops the server; an accepted connection stays open.
 UNET_FN_RESERVED20		EQU 20
 UNET_FN_RESERVED21		EQU 21
 UNET_FN_RESERVED22		EQU 22
@@ -130,12 +133,12 @@ UNET_CAP_TCP		EQU 1	; TCP client connect/send/recv/close
 UNET_CAP_UDP		EQU 2	; connected UDP
 UNET_CAP_RESOLVE		EQU 4	; RESOLVE returns a dotted-quad (may still NERR_NOTSUP at runtime)
 UNET_CAP_PING		EQU 8	; ICMP-style ping
-UNET_CAP_MULTICHAN		EQU 16	; channels 0 and 1 can be open at the same time (UNETESP >= 0.3; UNETRTL: 0)
-UNET_CAP_LISTEN		EQU 32	; inbound/listen sockets (neither backend: 0)
+UNET_CAP_MULTICHAN		EQU 16	; channels 0 and 1 can be open at the same time (UNETESP and UNETRTL >= 0.3.0)
+UNET_CAP_LISTEN		EQU 32	; inbound/listen sockets (UNETESP and UNETRTL >= 0.3.0)
 UNET_CAP_RAWETH		EQU 64	; raw Ethernet frames (RTL only)
 UNET_CAP_TRANSPARENT		EQU 128	; ESP transparent byte-pipe mode (reserved extension)
 UNET_CAP_RXFLOW		EQU 256	; consumer must honour RXPAUSE/RXRESUME for lossless receive
-UNET_CAP_ASYNCSEND		EQU 512	; SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE); UNETRTL: 0
+UNET_CAP_ASYNCSEND		EQU 512	; SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE; both backends >= 0.3.0)
 
 ; UNETESP v1 advertises: TCP | UDP | RESOLVE | PING | RXFLOW = 0x010F
 ; UNETESP v0.3 adds MULTICHAN = 0x011F
@@ -144,12 +147,14 @@ UNET_CAP_ASYNCSEND		EQU 512	; SEND can suspend with NERR_AGAIN instead of blocki
 ; ------------------------------------------------------
 ; STATUS(channel) state bits (returned in DE)
 ; ------------------------------------------------------
+UNET_ST_LISTEN		EQU 1	; channel is listening, with no inbound peer yet (CAP_LISTEN required)
 UNET_ST_CONN		EQU 2	; channel is connected (last known state)
 UNET_ST_RXPEND		EQU 4	; received data is buffered for this channel and
 				;   not delivered yet. OPTIONAL: only backends that
 				;   buffer per channel set it (UNETESP >= 0.3 with
 				;   CAP_MULTICHAN); UNETRTL never does, so consumers
 				;   must treat "not set" as "unknown", not as "empty"
+UNET_ST_ACCEPT		EQU 8	; inbound connection accepted through LISTEN; set with UNET_ST_CONN
 
 ; ------------------------------------------------------
 ; RECV flag bits (returned in IX)

@@ -208,15 +208,18 @@ comment_en = "A=option id, DE=value -> A"
 
 [[const]]
 group = "fn"
-name = "UNET_FN_RESERVED18"
+name = "UNET_FN_LISTEN"
 value = 18
-comment_en = "reserved -> NERR_NOTSUP"
+comment_en = """A=channel, DE=local TCP port (binary, 1..65535) -> A.
+  Requires UNET_CAP_LISTEN. Arms one closed channel for a single inbound
+  connection; poll RECV to progress accept. CLOSE or peer close re-arms the
+  listener on the same port; UNLISTEN stops it."""
 
 [[const]]
 group = "fn"
-name = "UNET_FN_RESERVED19"
+name = "UNET_FN_UNLISTEN"
 value = 19
-comment_en = ""
+comment_en = "A=the currently listening channel -> A. Stops the server; an accepted connection stays open."
 
 [[const]]
 group = "fn"
@@ -397,13 +400,13 @@ comment_en = "ICMP-style ping"
 group = "cap"
 name = "UNET_CAP_MULTICHAN"
 value = 0x0010
-comment_en = "channels 0 and 1 can be open at the same time (UNETESP >= 0.3; UNETRTL: 0)"
+comment_en = "channels 0 and 1 can be open at the same time (UNETESP and UNETRTL >= 0.3.0)"
 
 [[const]]
 group = "cap"
 name = "UNET_CAP_LISTEN"
 value = 0x0020
-comment_en = "inbound/listen sockets (neither backend: 0)"
+comment_en = "inbound/listen sockets (UNETESP and UNETRTL >= 0.3.0)"
 
 [[const]]
 group = "cap"
@@ -427,7 +430,7 @@ comment_en = "consumer must honour RXPAUSE/RXRESUME for lossless receive"
 group = "cap"
 name = "UNET_CAP_ASYNCSEND"
 value = 0x0200
-comment_en = "SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE); UNETRTL: 0"
+comment_en = "SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE; both backends >= 0.3.0)"
 
 # --------------------------------------------------------------------
 # STATUS(channel) state bits
@@ -437,6 +440,12 @@ id = "st"
 title_en = "STATUS(channel) state bits (returned in DE)"
 prefix = "UNET_ST_"
 format = "hex4"
+
+[[const]]
+group = "st"
+name = "UNET_ST_LISTEN"
+value = 0x0001
+comment_en = "channel is listening, with no inbound peer yet (CAP_LISTEN required)"
 
 [[const]]
 group = "st"
@@ -453,6 +462,12 @@ comment_en = """received data is buffered for this channel and
   buffer per channel set it (UNETESP >= 0.3 with
   CAP_MULTICHAN); UNETRTL never does, so consumers
   must treat "not set" as "unknown", not as "empty\""""
+
+[[const]]
+group = "st"
+name = "UNET_ST_ACCEPT"
+value = 0x0008
+comment_en = "inbound connection accepted through LISTEN; set with UNET_ST_CONN"
 
 # --------------------------------------------------------------------
 # RECV flag bits

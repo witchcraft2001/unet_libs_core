@@ -93,8 +93,11 @@ const
   UnetFnLasterr = 16;  { DE=dest, IX=max -> A=0; copies the TAIL of the last AT/driver
   response (the final ERROR/CLOSED line survives truncation) }
   UnetFnSetopt = 17;  { A=option id, DE=value -> A }
-  UnetFnReserved18 = 18;  { reserved -> NERR_NOTSUP }
-  UnetFnReserved19 = 19;
+  UnetFnListen = 18;  { A=channel, DE=local TCP port (binary, 1..65535) -> A.
+  Requires UNET_CAP_LISTEN. Arms one closed channel for a single inbound
+  connection; poll RECV to progress accept. CLOSE or peer close re-arms the
+  listener on the same port; UNLISTEN stops it. }
+  UnetFnUnlisten = 19;  { A=the currently listening channel -> A. Stops the server; an accepted connection stays open. }
   UnetFnReserved20 = 20;
   UnetFnReserved21 = 21;
   UnetFnReserved22 = 22;
@@ -128,23 +131,25 @@ const
   UnetCapUdp = 2;  { connected UDP }
   UnetCapResolve = 4;  { RESOLVE returns a dotted-quad (may still NERR_NOTSUP at runtime) }
   UnetCapPing = 8;  { ICMP-style ping }
-  UnetCapMultichan = 16;  { channels 0 and 1 can be open at the same time (UNETESP >= 0.3; UNETRTL: 0) }
-  UnetCapListen = 32;  { inbound/listen sockets (neither backend: 0) }
+  UnetCapMultichan = 16;  { channels 0 and 1 can be open at the same time (UNETESP and UNETRTL >= 0.3.0) }
+  UnetCapListen = 32;  { inbound/listen sockets (UNETESP and UNETRTL >= 0.3.0) }
   UnetCapRaweth = 64;  { raw Ethernet frames (RTL only) }
   UnetCapTransparent = 128;  { ESP transparent byte-pipe mode (reserved extension) }
   UnetCapRxflow = 256;  { consumer must honour RXPAUSE/RXRESUME for lossless receive }
-  UnetCapAsyncsend = 512;  { SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE); UNETRTL: 0 }
+  UnetCapAsyncsend = 512;  { SEND can suspend with NERR_AGAIN instead of blocking (see UNET_OPT_SENDSLICE; both backends >= 0.3.0) }
   { UNETESP v1 advertises: TCP | UDP | RESOLVE | PING | RXFLOW = 0x010F
 UNETESP v0.3 adds MULTICHAN = 0x011F
 UNETESP v0.4 adds ASYNCSEND = 0x031F }
 
   { STATUS(channel) state bits (returned in DE) }
+  UnetStListen = 1;  { channel is listening, with no inbound peer yet (CAP_LISTEN required) }
   UnetStConn = 2;  { channel is connected (last known state) }
   UnetStRxpend = 4;  { received data is buffered for this channel and
   not delivered yet. OPTIONAL: only backends that
   buffer per channel set it (UNETESP >= 0.3 with
   CAP_MULTICHAN); UNETRTL never does, so consumers
   must treat "not set" as "unknown", not as "empty" }
+  UnetStAccept = 8;  { inbound connection accepted through LISTEN; set with UNET_ST_CONN }
 
   { RECV flag bits (returned in IX) }
   UnetRxfTrunc = 1;  { oversized datagram was truncated. UNETESP never

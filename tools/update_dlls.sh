@@ -12,8 +12,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-UNETESP_SRC="${UNETESP_SRC:-$repo_root/../../sprinter_wifi/network/UNETESP.DLL}"
-UNETRTL_SRC="${UNETRTL_SRC:-$repo_root/../sprinter-rtl8019a/UNETRTL.DLL}"
+UNETESP_SRC="${UNETESP_SRC:-$repo_root/../../../sprinter_wifi/network/UNETESP.DLL}"
+UNETRTL_SRC="${UNETRTL_SRC:-$repo_root/../../../sprinter-rtl8019a/UNETRTL.DLL}"
 default_libman_root="$repo_root/../unet_libs_asm/extern/libman"
 if [[ -z "${LIBMAN_ROOT:-}" && -d "$default_libman_root/src" ]]; then
     LIBMAN_ROOT="$default_libman_root"

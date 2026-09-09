@@ -1,11 +1,8 @@
 Читать по-русски: [UNETAPIRU.md](UNETAPIRU.md).
 
-> Vendored into sprinter_unet_libs_core from the sprinter_wifi/network project
-> (`docs/UNETAPI.md`, UNETESP 0.2.41 / UNETRTL 0.2.56). Local changes from
-> the upstream copy are limited to correcting stale `CAP_MULTICHAN`
-> claims - UNETRTL has advertised it since 0.2.5x - see the changelog at
-> the bottom of this file. Re-check that changelog when re-vendoring a
-> newer upstream copy.
+> Vendored into sprinter_unet_libs_core from the backend projects and updated
+> for UNETESP 0.3.0 / UNETRTL 0.3.0. The ABI and generated bindings in this
+> repository are authoritative for consumers.
 >
 > This is the canonical copy: `sprinter_unet_libs_asm`,
 > `sprinter_unet_libs_pascal` and `sprinter_unet_libs_c` all pull it in
@@ -163,7 +160,9 @@ Register discipline for every UNET function:
 | 15 | GETINFO | A=field, DE=dest, IX=max | A |
 | 16 | LASTERR | DE=dest, IX=max | A=0 |
 | 17 | SETOPT | A=option, DE=value | A |
-| 18-23 | (reserved) | - | A=NERR_NOTSUP |
+| 18 | LISTEN | A=chan, DE=local port (binary) | A |
+| 19 | UNLISTEN | A=chan | A |
+| 20-23 | (reserved) | - | A=NERR_NOTSUP |
 
 `host` and `port` are NUL-terminated ASCII strings (e.g. `"example.com",0` and
 `"80",0`).
@@ -188,10 +187,11 @@ the DLL was not loaded into window 3; FINI closes any still-open link.
 
 Returns the capability bitmask in DE and the ABI version (`major<<8|minor`) in
 IX. Callable before `NETINIT`. Check the ABI major byte before relying on the
-numbered functions. UNETESP 0.4 reports `0x031F` =
-`TCP | UDP | RESOLVE | PING | RXFLOW | MULTICHAN | ASYNCSEND` (0.3 reported
-`0x011F`, 0.2 `0x010F`). The ABI version stays `0x0100`: two channels and
-suspendable sends are discovered through capability bits, not version bumps.
+numbered functions. UNETESP 0.3.0 reports `0x033F` =
+`TCP | UDP | RESOLVE | PING | MULTICHAN | LISTEN | RXFLOW | ASYNCSEND`; UNETRTL
+0.3.0 reports `0x023F`, without `RXFLOW`. The ABI version stays `0x0100`:
+capabilities, including inbound sockets, are discovered through bits rather
+than version bumps.
 
 ### Function 3 - NETINIT
 
@@ -296,12 +296,16 @@ With `A` = a channel number, returns that channel's state in DE:
 
 | bit | meaning |
 |-----|---------|
+| 0 (`0x01`) | channel is listening; `LISTEN` is armed and no peer has connected |
 | 1 (`0x02`) | channel is connected (last known state) |
 | 2 (`0x04`) | received data is buffered for it and not delivered yet (optional; only backends with `CAP_MULTICHAN` set it, so treat "clear" as "unknown" rather than "empty") |
+| 3 (`0x08`) | connection was accepted through `LISTEN`; always set with bit 1 |
 
 STATUS reads memory only - it never touches the UART, so it is cheap enough to
 poll between other work. A channel whose peer has closed reports the pending bit
 without the connected bit, which is the cue to keep reading until `NERR_CLOSED`.
+Bit 0 belongs only to this per-channel form; the `A=0xFF` form uses it for the
+unrelated "environment configured" state.
 
 With `A = 0xFF`, returns network status **without touching the hardware**:
 `A = NERR_OK` / `NERR_NONET`, and DE bit0 = the network is configured (env
@@ -384,7 +388,18 @@ probing.
   keeps sends fully blocking; non-zero values are clamped to >= 50. Gate on
   `UNET_CAP_ASYNCSEND`. See "Non-blocking SEND" below.
 
-### Non-blocking SEND (CAP_ASYNCSEND, UNETESP >= 0.4)
+### Functions 18 / 19 - LISTEN / UNLISTEN
+
+Gate these functions on `UNET_CAP_LISTEN`. `LISTEN` takes a closed channel in
+`A` and a local TCP port in `DE` as a **binary** 16-bit value (1..65535, not an
+ASCIIZ string). Only one channel can listen; a second call returns
+`NERR_STATE`. There is no accept call: poll `RECV` on the listening channel to
+advance the incoming handshake. Once accepted, STATUS reports
+`UNET_ST_CONN|UNET_ST_ACCEPT` and the channel behaves like an outbound
+connection. Closing it re-arms the same listener and port. `UNLISTEN` stops
+that re-arm; it leaves an already accepted connection open until `CLOSE`.
+
+### Non-blocking SEND (CAP_ASYNCSEND, UNETESP/UNETRTL >= 0.3.0)
 
 A `CIPSEND` is a transaction: once the command text is out, a second copy may
 be swallowed as payload, so "time out and retry" is never safe. Instead the
@@ -510,7 +525,7 @@ care. Notes:
 
 The RTL backend has no such window (the card buffers receive independently), so
 its consumers behave identically. (An ESP-only raw transparent pipe could still
-be added behind the reserved `CAP_TRANSPARENT` bit and slots 18-23, but the
+be added behind the reserved `CAP_TRANSPARENT` bit and slots 20-23, but the
 portable, now-lossless path is SEND/RECV.)
 
 ### Two channels
@@ -620,9 +635,11 @@ for the sprinter-rtl8019a project:
   UDPTEST / NTP / TFTP tools.
 - **RXPAUSE / RXRESUME:** no-ops returning `NERR_OK`; the card buffers receive
   in its ~14.5 KB ring. Clear `CAP_RXFLOW`.
-- **Capabilities:** `GETCAPS` reports `0x001F` =
-  `TCP | UDP | RESOLVE | PING | MULTICHAN`. `CAP_RXFLOW` off (no-op
-  RXPAUSE/RXRESUME above); `CAP_RAWETH`/`CAP_LISTEN`/`CAP_ASYNCSEND` unset.
+- **Capabilities:** UNETRTL 0.3.0 reports `0x023F` =
+  `TCP | UDP | RESOLVE | PING | MULTICHAN | LISTEN | ASYNCSEND`.
+  `CAP_RXFLOW` is off (no-op RXPAUSE/RXRESUME above); `CAP_RAWETH` is unset.
+- **LISTEN / UNLISTEN:** passive TCP open is available with the same
+  `CAP_LISTEN`/RECV-driven accept and automatic re-arm contract as UNETESP.
 - **Two channels (passive FTP):** implemented on both backends. UNETESP does
   it through ESP-AT multi-connection mode (`AT+CIPMUX=1`, one receive buffer
   per channel, `NETDONE` restoring `CIPMUX=0`), since 0.3. UNETRTL does it
