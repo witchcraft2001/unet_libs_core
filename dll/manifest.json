@@ -14,5 +14,13 @@
     "size": 18159,
     "sha256": "d0616f6f6372ed201d829854808f48dd6d908ca9ef2feee4db63b415fd17a769",
     "caps": "0x023F"
+  },
+  "UNET509B.DLL": {
+    "tag": "509B",
+    "source": "https://github.com/witchcraft2001/sprinter-3C509B",
+    "version": "0.0.1",
+    "size": 21908,
+    "sha256": "6bcb3a9bcec62574b9e7cc9f1a38caac8273aa7bfaee6f7c1ec5c5fe56c0b992",
+    "caps": "0x023F"
   }
 }

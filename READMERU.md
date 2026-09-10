@@ -35,7 +35,8 @@ bindings/pascal/UNET.INC    сгенерировано - голый $I-include �
                             (не юнит - см. заголовок самого файла, почему)
 dll/UNETESP.DLL             готовый бекенд WiFi/ESP8266
 dll/UNETRTL.DLL             готовый бекенд ISA-карты RTL8019A
-dll/manifest.json           size/sha256/версия/происхождение обеих DLL
+dll/UNET509B.DLL            готовый бекенд ISA-карты 3Com 3C509B
+dll/manifest.json           size/sha256/версия/происхождение всех DLL
 docs/UNETAPI.md             контракт функций UNET (текстовый справочник)
 docs/UNETLD-SPEC.md         поведение загрузчика/селектора UNETLD (языко-нейтрально)
 tools/gen_bindings.py       рендерит bindings/ из abi/unet_abi.toml
@@ -97,9 +98,9 @@ EXE примеров в каждом языковом репозитории д�
 tools/update_dlls.sh
 ```
 
-Копирует свежие `UNETESP.DLL`/`UNETRTL.DLL` из соседних чекаутов проектов-
-бекендов (переопределяется переменными среды `UNETESP_SRC`/`UNETRTL_SRC`),
-обновляет size/sha256 в `dll/manifest.json` (поле `version` правьте
+Копирует свежие `UNETESP.DLL`/`UNETRTL.DLL`/`UNET509B.DLL` из соседних
+чекаутов проектов-бекендов (переопределяется переменными среды
+`UNETESP_SRC`/`UNETRTL_SRC`/`UNET509B_SRC`), обновляет size/sha256 в `dll/manifest.json` (поле `version` правьте
 вручную), перепроверяет и предупреждает, если замороженный ABI в
 `abi/unet_abi.toml` разошёлся с исходным `unet.inc`, из которого он был
 вендорен (через `gen_bindings.py compare`, а не побайтовый `cmp` - см.
@@ -143,12 +144,15 @@ build-time идентичность - это `sha256` в `dll/manifest.json`.
 | --- | --- | --- |
 | WiFi (`UNETESP.DLL`) | `NETUP` | `NET=WIFI`, `NET_ESP_*`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
 | RTL8019A (`UNETRTL.DLL`) | `NETCFG -i`, затем `IFUP` | `NET=RTL`, `NET_RTL_*`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
+| 3Com 3C509B (`UNET509B.DLL`) | `NETCFG -i`, затем `IFUP` | `NET=509B`, `NET_HW`/`NET_IDPORT`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
 
 Инструменты настройки берите из дистрибутива своего бекенда: `NETUP`
 входит в комплект WiFi-кита
 ([sprinter_net](https://github.com/witchcraft2001/sprinter_net)),
 `NETCFG`/`IFUP` - в комплект RTL-кита
 ([sprinter-rtl8019a](https://github.com/witchcraft2001/sprinter-rtl8019a)).
+Для бекенда 3Com 3C509B используйте `NETCFG`/`IFUP` из
+[кита sprinter-3C509B](https://github.com/witchcraft2001/sprinter-3C509B).
 `UNET_FN_STATUS` с `A=0xFF` проверяет, что эта конфигурация опубликована, не
 трогая железо - удобно для дружелюбного сообщения «сначала запустите
 NETUP/IFUP». Полный список переменных и справочник функций UNET - в

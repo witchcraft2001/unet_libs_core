@@ -6,6 +6,7 @@
 # Env overrides:
 #   UNETESP_SRC  path to UNETESP.DLL              (default: sibling sprinter_wifi/network checkout)
 #   UNETRTL_SRC  path to UNETRTL.DLL               (default: sibling sprinter-rtl8019a checkout)
+#   UNET509B_SRC path to UNET509B.DLL              (default: sibling sprinter-3C509B checkout)
 #   LIBMAN_ROOT  path to a libman checkout, for sprinter_mkdll verify
 #                (default: sibling unet_libs_asm/extern/libman, if present)
 set -euo pipefail
@@ -14,6 +15,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 UNETESP_SRC="${UNETESP_SRC:-$repo_root/../../../sprinter_wifi/network/UNETESP.DLL}"
 UNETRTL_SRC="${UNETRTL_SRC:-$repo_root/../../../sprinter-rtl8019a/UNETRTL.DLL}"
+UNET509B_SRC="${UNET509B_SRC:-$repo_root/../../../sprinter-3C509B/build/UNET509B.DLL}"
 default_libman_root="$repo_root/../unet_libs_asm/extern/libman"
 if [[ -z "${LIBMAN_ROOT:-}" && -d "$default_libman_root/src" ]]; then
     LIBMAN_ROOT="$default_libman_root"
@@ -22,6 +24,7 @@ export LIBMAN_ROOT="${LIBMAN_ROOT:-}"
 
 esp_version_file="$(dirname "$UNETESP_SRC")/UNETESP_VERSION"
 rtl_version_inc="$(dirname "$UNETRTL_SRC")/src/include/version.inc"
+backend509b_version_inc="$(dirname "$UNET509B_SRC")/../src/include/version.inc"
 
 if [[ ! -f "$UNETESP_SRC" ]]; then
     echo "error: UNETESP.DLL source not found at $UNETESP_SRC (set UNETESP_SRC)" >&2
@@ -31,9 +34,14 @@ if [[ ! -f "$UNETRTL_SRC" ]]; then
     echo "error: UNETRTL.DLL source not found at $UNETRTL_SRC (set UNETRTL_SRC)" >&2
     exit 1
 fi
+if [[ ! -f "$UNET509B_SRC" ]]; then
+    echo "error: UNET509B.DLL source not found at $UNET509B_SRC (set UNET509B_SRC)" >&2
+    exit 1
+fi
 
 cp "$UNETESP_SRC" "$repo_root/dll/UNETESP.DLL"
 cp "$UNETRTL_SRC" "$repo_root/dll/UNETRTL.DLL"
+cp "$UNET509B_SRC" "$repo_root/dll/UNET509B.DLL"
 
 esp_version="unknown"
 if [[ -f "$esp_version_file" ]]; then
@@ -43,9 +51,14 @@ rtl_version="unknown"
 if [[ -f "$rtl_version_inc" ]]; then
     rtl_version="$(grep -oE 'PACKAGE_VERSION "[^"]+"' "$rtl_version_inc" | sed -E 's/.*"([^"]+)"/\1/')"
 fi
+backend509b_version="unknown"
+if [[ -f "$backend509b_version_inc" ]]; then
+    backend509b_version="$(grep -oE 'PACKAGE_VERSION "[^"]+"' "$backend509b_version_inc" | sed -E 's/.*"([^"]+)"/\1/')"
+fi
 
 echo "UNETESP.DLL source version: $esp_version"
 echo "UNETRTL.DLL source version: $rtl_version"
+echo "UNET509B.DLL source version: $backend509b_version"
 echo "Update dll/manifest.json \"version\" fields by hand if they changed."
 
 python3 "$repo_root/tools/check_dlls.py" --update

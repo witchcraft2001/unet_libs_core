@@ -35,7 +35,8 @@ bindings/pascal/UNET.INC    generated - bare $I-include of const declarations
                             (not a unit - see the file's own header for why)
 dll/UNETESP.DLL             prebuilt WiFi/ESP8266 backend
 dll/UNETRTL.DLL             prebuilt ISA RTL8019A backend
-dll/manifest.json           size/sha256/version/provenance for both DLLs
+dll/UNET509B.DLL            prebuilt ISA 3Com 3C509B backend
+dll/manifest.json           size/sha256/version/provenance for all DLLs
 docs/UNETAPI.md             UNET function contract (prose reference)
 docs/UNETLD-SPEC.md         UNETLD loader/selector behavior (language-neutral)
 tools/gen_bindings.py       renders bindings/ from abi/unet_abi.toml
@@ -94,9 +95,9 @@ identical, so the assembled code is too).
 tools/update_dlls.sh
 ```
 
-Copies fresh `UNETESP.DLL`/`UNETRTL.DLL` from sibling backend-project
-checkouts (override with the `UNETESP_SRC`/`UNETRTL_SRC` environment
-variables), updates `dll/manifest.json`'s size/sha256 (bump the `version`
+Copies fresh `UNETESP.DLL`/`UNETRTL.DLL`/`UNET509B.DLL` from sibling
+backend-project checkouts (override with the `UNETESP_SRC`/`UNETRTL_SRC`/
+`UNET509B_SRC` environment variables), updates `dll/manifest.json`'s size/sha256 (bump the `version`
 field by hand), re-verifies, and warns if the frozen ABI in
 `abi/unet_abi.toml` has drifted from the upstream `unet.inc` it was
 vendored from (via `gen_bindings.py compare`, not a byte `cmp` - see
@@ -140,11 +141,14 @@ consumer programs) set by hand. If it is missing, the right fix is always
 | --- | --- | --- |
 | WiFi (`UNETESP.DLL`) | `NETUP` | `NET=WIFI`, `NET_ESP_*`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
 | RTL8019A (`UNETRTL.DLL`) | `NETCFG -i` then `IFUP` | `NET=RTL`, `NET_RTL_*`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
+| 3Com 3C509B (`UNET509B.DLL`) | `NETCFG -i` then `IFUP` | `NET=509B`, `NET_HW`/`NET_IDPORT`, `NET_IP`/`NET_MASK`/`NET_GW`/`NET_MAC`/... |
 
 Get the bring-up tools from your backend's own distribution: `NETUP` comes
 with the WiFi kit ([sprinter_net](https://github.com/witchcraft2001/sprinter_net)),
 `NETCFG`/`IFUP` with the RTL kit
 ([sprinter-rtl8019a](https://github.com/witchcraft2001/sprinter-rtl8019a)).
+For the 3Com 3C509B backend, use `NETCFG`/`IFUP` from the
+[sprinter-3C509B](https://github.com/witchcraft2001/sprinter-3C509B) kit.
 `UNET_FN_STATUS` called with `A=0xFF` checks that this environment was
 published without touching any hardware - useful for a friendly "run
 NETUP/IFUP first" message. See [docs/UNETAPI.md](docs/UNETAPI.md) for the
