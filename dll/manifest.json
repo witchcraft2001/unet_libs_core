@@ -2,25 +2,25 @@
   "UNETESP.DLL": {
     "tag": "ESP",
     "source": "https://github.com/witchcraft2001/sprinter_net (network/)",
-    "version": "0.3.0",
-    "size": 14945,
-    "sha256": "71b2bf1c504a0f73036eff7aa72c56059bc04cbfc65643f1536cdeb0e4f46955",
+    "version": "0.3.1",
+    "size": 15467,
+    "sha256": "2f68f7a1b6cfa1667465944fbf970062426f7affddeb42ae9ac4d1a236a20ed7",
     "caps": "0x033F"
   },
   "UNETRTL.DLL": {
     "tag": "RTL",
     "source": "https://github.com/witchcraft2001/sprinter-rtl8019a",
-    "version": "0.3.0",
-    "size": 18159,
-    "sha256": "d0616f6f6372ed201d829854808f48dd6d908ca9ef2feee4db63b415fd17a769",
+    "version": "0.3.9",
+    "size": 18152,
+    "sha256": "a128eb713104e8876f76d39ae603037276d1512b96495f48c21ef0f21dbf8d66",
     "caps": "0x023F"
   },
   "UNET509B.DLL": {
     "tag": "509B",
     "source": "https://github.com/witchcraft2001/sprinter-3C509B",
-    "version": "0.0.1",
-    "size": 21908,
-    "sha256": "ebc1b8f8be0f19780c2252e5f1645d4db99d27661c0a9e905d4802d79a69c428",
+    "version": "0.1.2",
+    "size": 23743,
+    "sha256": "ad319d7af7685da2dc96ae50566d8ccd569eef2a5d8ca6fb4e4687a15e84c8d6",
     "caps": "0x023F"
   }
 }
