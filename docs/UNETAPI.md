@@ -1,8 +1,9 @@
 Читать по-русски: [UNETAPIRU.md](UNETAPIRU.md).
 
-> Vendored into sprinter_unet_libs_core from the backend projects and updated
-> for UNETESP 0.3.0 / UNETRTL 0.3.0. The ABI and generated bindings in this
-> repository are authoritative for consumers.
+> Vendored into sprinter_unet_libs_core from the backend projects. This
+> reference describes shared ABI 1.0; shipped backend versions are recorded
+> in [dll/manifest.json](../dll/manifest.json). The ABI and generated bindings
+> in this repository are authoritative for consumers.
 >
 > This is the canonical copy: `sprinter_unet_libs_asm`,
 > `sprinter_unet_libs_pascal` and `sprinter_unet_libs_c` all pull it in
@@ -146,7 +147,7 @@ Register discipline for every UNET function:
 | 1 | FINI | - | (libman free hook; closes link) |
 | 2 | GETCAPS | - | A=0, DE=caps, IX=ABI version |
 | 3 | NETINIT | - | A |
-| 4 | NETDONE | - | A=0 |
+| 4 | NETDONE | - | A |
 | 5 | CONNECT | A=chan, DE=host, IX=port | A |
 | 6 | SEND | A=chan, DE=buf, IX=len | A, DE=sent |
 | 7 | RECV | A=chan, DE=buf, IX=max, IY=timeout_ms | A, DE=got, IX=flags |
@@ -222,11 +223,21 @@ response) or `NERR_BUSY` (ESP IP stack still warming up after join).
 
 `CLOSE` closes **one** channel and is idempotent. Data still buffered for that
 channel is discarded: to shut down gracefully, read until `NERR_CLOSED` first.
+The result is backend-specific. UNETESP can return `NERR_BUSY` if it cannot
+safely finish the close command; the channel remains open locally and `CLOSE`
+can be retried. Since 0.3.10, UNETRTL performs an orderly FIN close when all
+sent data is acknowledged, and aborts with RST if some sent data is still
+unacknowledged. It returns `NERR_TIMEOUT` if a FIN gets no response,
+`NERR_CANCEL` if the wait is cancelled, or `NERR_HW` if the FIN/RST could not
+be transmitted. UNETRTL releases the channel locally in each case, so these
+errors report whether peer notification was confirmed; a closed channel
+cannot be retried.
 
 `NETDONE` closes every channel and hands the ESP back in single-connection mode
 (`AT+CIPMUX=0`), which is what the stock utilities (WGET, FTP, TELNET, ...)
 expect to find. The network itself stays up, so a later `CONNECT` still works -
-it re-arms multi-connection mode by itself.
+it re-arms multi-connection mode by itself. `A=0` means success; otherwise
+`NETDONE` propagates the backend close status described above.
 
 ### Function 5 - CONNECT
 

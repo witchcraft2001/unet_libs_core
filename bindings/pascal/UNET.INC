@@ -58,7 +58,7 @@ const
   UnetFnFini = 1;  { libman free hook. Closes any open link, A=0. Do not call directly. }
   UnetFnGetcaps = 2;  { -> A=0, DE=caps bitmask, IX=UNET_ABI_VERSION. Callable before NETINIT. }
   UnetFnNetinit = 3;  { -> A (0 / NERR_NONET / NERR_HW / NERR_BUSY). Bring the link layer up. }
-  UnetFnNetdone = 4;  { Close the active channel, leave the network up. A=0. Idempotent. }
+  UnetFnNetdone = 4;  { Close open channels, leave the network up. A=status (0 on success); backend-specific close errors are possible. Idempotent. }
   UnetFnConnect = 5;  { A=channel, DE=host ASCIIZ, IX=port ASCIIZ -> A
   channel 0..1 when GETCAPS reports CAP_MULTICHAN,
   otherwise channel 0 only (else NERR_PARAM)
@@ -77,7 +77,7 @@ const
                                UNET_RXF_XCHAN)
   A=NERR_CLOSED             : peer closed (any DE bytes are valid first)
   IX flags: see UNET_RXF_* below }
-  UnetFnClose = 8;  { A=channel -> A. Idempotent. Closes ONE channel; use NETDONE to close every channel at once. }
+  UnetFnClose = 8;  { A=channel -> A. Idempotent if closed. Closes ONE channel; use NETDONE for every channel. A reports backend-specific close errors. }
   UnetFnStatus = 9;  { A=channel -> A=0, DE=state (see UNET_ST_* below)
   A=0xFF     -> network status WITHOUT touching hardware:
                 A=0/NERR_NONET, DE bit0 env configured, bit1 NETINIT done }

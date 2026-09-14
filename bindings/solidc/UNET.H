@@ -53,7 +53,7 @@
 #define UNET_FN_FINI 1 /* libman free hook. Closes any open link, A=0. Do not call directly. */
 #define UNET_FN_GETCAPS 2 /* -> A=0, DE=caps bitmask, IX=UNET_ABI_VERSION. Callable before NETINIT. */
 #define UNET_FN_NETINIT 3 /* -> A (0 / NERR_NONET / NERR_HW / NERR_BUSY). Bring the link layer up. */
-#define UNET_FN_NETDONE 4 /* Close the active channel, leave the network up. A=0. Idempotent. */
+#define UNET_FN_NETDONE 4 /* Close open channels, leave the network up. A=status (0 on success); backend-specific close errors are possible. Idempotent. */
 /*
  * A=channel, DE=host ASCIIZ, IX=port ASCIIZ -> A
  *   channel 0..1 when GETCAPS reports CAP_MULTICHAN,
@@ -81,7 +81,7 @@
  *   IX flags: see UNET_RXF_* below
  */
 #define UNET_FN_RECV 7
-#define UNET_FN_CLOSE 8 /* A=channel -> A. Idempotent. Closes ONE channel; use NETDONE to close every channel at once. */
+#define UNET_FN_CLOSE 8 /* A=channel -> A. Idempotent if closed. Closes ONE channel; use NETDONE for every channel. A reports backend-specific close errors. */
 /*
  * A=channel -> A=0, DE=state (see UNET_ST_* below)
  *   A=0xFF     -> network status WITHOUT touching hardware:

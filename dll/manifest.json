@@ -10,9 +10,9 @@
   "UNETRTL.DLL": {
     "tag": "RTL",
     "source": "https://github.com/witchcraft2001/sprinter-rtl8019a",
-    "version": "0.3.9",
-    "size": 18152,
-    "sha256": "a128eb713104e8876f76d39ae603037276d1512b96495f48c21ef0f21dbf8d66",
+    "version": "0.3.10",
+    "size": 18145,
+    "sha256": "a017bb8c0de6db496092676f5ce4eb47dc5b833d812eb77bbc885bb925d17142",
     "caps": "0x023F"
   },
   "UNET509B.DLL": {
@@ -20,7 +20,7 @@
     "source": "https://github.com/witchcraft2001/sprinter-3C509B",
     "version": "0.1.2",
     "size": 23743,
-    "sha256": "ad319d7af7685da2dc96ae50566d8ccd569eef2a5d8ca6fb4e4687a15e84c8d6",
+    "sha256": "4f9d5d736f52dadeddba28db8a71f6c6e253f49da646bf17cb4b67a78b51ccb1",
     "caps": "0x023F"
   }
 }

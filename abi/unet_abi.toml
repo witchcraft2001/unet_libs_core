@@ -105,7 +105,7 @@ comment_en = "-> A (0 / NERR_NONET / NERR_HW / NERR_BUSY). Bring the link layer 
 group = "fn"
 name = "UNET_FN_NETDONE"
 value = 4
-comment_en = "Close the active channel, leave the network up. A=0. Idempotent."
+comment_en = "Close open channels, leave the network up. A=status (0 on success); backend-specific close errors are possible. Idempotent."
 
 [[const]]
 group = "fn"
@@ -144,7 +144,7 @@ comment_en = """A=channel, DE=buffer, IX=max, IY=timeout_ms -> A, DE=received, I
 group = "fn"
 name = "UNET_FN_CLOSE"
 value = 8
-comment_en = "A=channel -> A. Idempotent. Closes ONE channel; use NETDONE to close every channel at once."
+comment_en = "A=channel -> A. Idempotent if closed. Closes ONE channel; use NETDONE for every channel. A reports backend-specific close errors."
 
 [[const]]
 group = "fn"
